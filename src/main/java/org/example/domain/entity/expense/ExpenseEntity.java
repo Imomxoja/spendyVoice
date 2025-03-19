@@ -20,6 +20,7 @@ public class ExpenseEntity extends BaseEntity {
     private String product;
     private String quantity;
     private Double price;
+    private Currency currency;
     @ManyToOne
     @JoinColumn(name = "user_id")
     private UserEntity user;

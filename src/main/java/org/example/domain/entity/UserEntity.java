@@ -26,9 +26,6 @@ public class UserEntity extends BaseEntity implements UserDetails {
     private List<ExpenseEntity> expenses;
     @OneToMany(mappedBy = "user")
     private List<VoiceCommandEntity> commands;
-    @ManyToOne
-    @JoinColumn(name = "currency_id")
-    private CurrencyEntity currency;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

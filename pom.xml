@@ -113,6 +113,11 @@
             <artifactId>stanford-corenlp</artifactId>
             <version>4.5.7</version>
         </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20210307</version>
+        </dependency>
     </dependencies>
 
 </project>

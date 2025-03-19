@@ -10,15 +10,16 @@ import edu.stanford.nlp.pipeline.CoreDocument;
 import edu.stanford.nlp.pipeline.StanfordCoreNLP;
 import lombok.RequiredArgsConstructor;
 import org.example.domain.entity.UserEntity;
+import org.example.domain.entity.VoiceCommandEntity;
 import org.example.domain.response.BaseResponse;
+import org.example.domain.response.ExpenseResponse;
 import org.example.domain.response.VoiceCommandResponse;
 import org.example.repository.UserRepository;
 import org.example.repository.VoiceCommandRepository;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 
@@ -30,14 +31,12 @@ public class VoiceCommandService {
     private final ExpenseService expenseService;
     private final StanfordCoreNLP stanfordCoreNLP;
     private final AssemblyAI assembly;
-
+    private final Storage storage;
 
     @Value("${google.cloud.bucket.name}")
     private String BUCKET_NAME;
-    @Value("${project.id}")
-    private String PROJECT_ID;
-    @Value("${google.service.account}")
-    private String PATH;
+
+
     private static final Set<String> CURRENCY_WORDS =
             Set.of("dollars", "euros", "pounds", "dollar", "euro", "pound");
     private static final Set<String> MEASUREMENT_WORDS =
@@ -71,12 +70,14 @@ public class VoiceCommandService {
                     .build();
         }
 
-        Map<String, List<String>> extracted = analyzeText(transcript.getText().get());
+        String rawText = transcript.getText().get();
 
-        return save(extracted, user.get());
+        Map<String, List<String>> extracted = analyzeText(rawText);
+
+        return save(extracted, user.get(), rawText);
     }
 
-    private BaseResponse<VoiceCommandResponse> save(Map<String, List<String>> extracted, UserEntity user) {
+    private BaseResponse<VoiceCommandResponse> save(Map<String, List<String>> extracted, UserEntity user, String rawText) {
         List<String> products = extracted.get("PRODUCT");
         List<String> quantities = extracted.get("QUANTITY");
         List<String> prices = extracted.get("PRICE");
@@ -87,7 +88,17 @@ public class VoiceCommandService {
                 .status(400)
                 .build();
 
-        expenseService.save(products, quantities, prices, user);
+        BaseResponse<List<ExpenseResponse>> response = expenseService.save(products, quantities, prices, user);
+
+        for (ExpenseResponse resp : response.getData()) {
+            VoiceCommandEntity command = VoiceCommandEntity.builder()
+                    .rawText(rawText)
+                    .user(resp.getUser())
+                    .expense(expenseService.findById(resp.getId()).isPresent() ?
+                            expenseService.findById(resp.getId()).get() : null)
+                    .build();
+            voiceCommandRepository.save(command);
+        }
 
         return BaseResponse.<VoiceCommandResponse>builder()
                 .message("Expenses saved successfully")
@@ -96,14 +107,6 @@ public class VoiceCommandService {
     }
 
     private String uploadAudioIntoCloud(MultipartFile file) throws IOException {
-        Storage storage = StorageOptions.newBuilder()
-                .setCredentials(ServiceAccountCredentials.fromStream(
-                        new FileInputStream(PATH)
-                ))
-                .setProjectId(PROJECT_ID)
-                .build()
-                .getService();
-
         String fileName = "audio/" + file.getOriginalFilename();
         BlobId blobId = BlobId.of(BUCKET_NAME, fileName);
         BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
