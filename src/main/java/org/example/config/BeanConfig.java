@@ -1,6 +1,9 @@
 package org.example.config;
 
 import com.assemblyai.api.AssemblyAI;
+import com.google.auth.oauth2.ServiceAccountCredentials;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 import edu.stanford.nlp.pipeline.StanfordCoreNLP;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
@@ -17,12 +20,19 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.util.Properties;
 
 @Configuration
 @RequiredArgsConstructor
 public class BeanConfig {
     private final UserRepository userRepository;
+
+    @Value("${google.service.account}")
+    private String PATH;
+    @Value("${project.id}")
+    private String PROJECT_ID;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -52,6 +62,23 @@ public class BeanConfig {
     @Bean
     public AssemblyAI assemblyAI(@Value("${assemblyai.api.key}") String API_KEY) {
         return AssemblyAI.builder().apiKey(API_KEY).build();
+    }
+
+    @Bean
+    public Storage getStorage() {
+        Storage storage;
+        try {
+            storage = StorageOptions.newBuilder()
+                    .setCredentials(ServiceAccountCredentials.fromStream(new FileInputStream(
+                            PATH)))
+                    .setProjectId(PROJECT_ID)
+                    .build()
+                    .getService();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        return storage;
     }
 
     @Bean
