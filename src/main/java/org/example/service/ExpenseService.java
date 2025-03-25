@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.domain.entity.UserEntity;
 import org.example.domain.entity.expense.Currency;
 import org.example.domain.entity.expense.ExpenseEntity;
+import org.example.domain.request.ExpenseRequest;
 import org.example.domain.response.BaseResponse;
 import org.example.domain.response.ExpenseResponse;
 import org.example.repository.ExpenseRepository;
@@ -25,21 +26,17 @@ public class ExpenseService {
     @Value("${exchange.api}")
     private String API;
 
-    public BaseResponse<List<ExpenseResponse>> save(List<String> products, List<String> quantities,
-                                                    List<String> prices, UserEntity user) {
-        int i = 0;
-
+    public BaseResponse<List<ExpenseResponse>> save(List<ExpenseRequest> expenses, UserEntity user) {
         List<ExpenseResponse> responses = new ArrayList<>();
 
-        while (i < prices.size()) {
+        for (ExpenseRequest exp : expenses) {
             ExpenseEntity expense = ExpenseEntity.builder()
-                    .product(products.get(i))
-                    .currency(extractCurrency(prices.get(i)))
-                    .price(extractPrice(prices.get(i)))
-                    .quantity(quantities.get(i))
+                    .product(exp.getProduct() == null ? "not provided" : exp.getProduct())
+                    .currency(extractCurrency(exp.getPrice()) == null ? "not provided" : extractCurrency(exp.getPrice()))
+                    .price(extractPrice(exp.getPrice()) == null ? "not provided" : extractPrice(exp.getPrice()))
+                    .quantity(exp.getQuantity().isEmpty() ? "not provided" : exp.getQuantity())
                     .user(user).build();
             expenseRepository.save(expense);
-            i++;
 
             Optional<ExpenseEntity> expenseEntity = findById(expense.getId());
 
@@ -61,19 +58,19 @@ public class ExpenseService {
                 .build();
     }
 
-    private Double extractPrice(String s) {
-        if (s.isEmpty()) return 0D;
+    private String extractPrice(String s) {
+        if (s.isEmpty()) return null;
 
         StringBuilder sb = new StringBuilder();
 
         for (char c : s.toCharArray()) {
-            if (Character.isDigit(c)) sb.append(c);
+            if (Character.isDigit(c) || c == '.' || c == ',') sb.append(c);
         }
 
-        return Double.valueOf(sb.toString());
+        return sb.toString();
     }
 
-    private Currency extractCurrency(String s) {
+    private String extractCurrency(String s) {
         if (s.isEmpty()) return null;
 
         StringBuilder sb = new StringBuilder();
@@ -100,24 +97,23 @@ public class ExpenseService {
         }
 
         ExpenseEntity expenseEntity = expense.get();
-
-        String code = expenseEntity.getCurrency().getNames()[0];
+        String code = expenseEntity.getCurrency();
 
         if (code.isEmpty()) return BaseResponse.<ExpenseResponse>builder()
                 .message("Couldn't have been exchanged, please try again!")
                 .status(400)
                 .build();
 
-        double converted = exchangeRate(expenseEntity.getPrice(), code, currency);
+        String converted = exchangeRate(Double.valueOf(expenseEntity.getPrice()), code, currency);
 
-        if (converted == -1) {
+        if (converted == null) {
             return BaseResponse.<ExpenseResponse>builder()
                     .status(400)
                     .message("failed to convert")
                     .build();
         }
 
-        expenseEntity.setCurrency(Currency.fromString(currency));
+        expenseEntity.setCurrency(currency);
         expenseEntity.setPrice(converted);
         expenseRepository.save(expenseEntity);
 
@@ -127,8 +123,8 @@ public class ExpenseService {
                 .build();
     }
 
-    private double exchangeRate(Double price, String base, String currency) {
-        String url = BASE_URL + API + "/latest/" + base;
+    private String exchangeRate(Double price, String from, String to) {
+        String url = BASE_URL + API + "/latest/" + from;
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -138,10 +134,22 @@ public class ExpenseService {
         try {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             JSONObject json = new JSONObject(response.body());
-            double rate = json.getJSONObject("conversion_rates").getDouble(currency);
-            return price * rate;
+
+            // conversion rates contain all the currencies with the latest rates
+            if (!json.has("conversion_rates")) {
+                throw new RuntimeException("conversion_rates not found");
+            }
+
+            JSONObject conversionRates = json.getJSONObject("conversion_rates");
+
+            if (!conversionRates.has(to)) {
+                throw new RuntimeException("Target currency not found in conversion rates: " + to);
+            }
+
+            double rate = conversionRates.getDouble(to);
+            return "" + price * rate;
         } catch (Exception e) {
-            return -1;
+            return null;
         }
     }
 }

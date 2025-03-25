@@ -6,11 +6,16 @@ import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.ling.IndexedWord;
 import edu.stanford.nlp.pipeline.CoreDocument;
+import edu.stanford.nlp.pipeline.CoreSentence;
 import edu.stanford.nlp.pipeline.StanfordCoreNLP;
+import edu.stanford.nlp.semgraph.SemanticGraph;
+import edu.stanford.nlp.semgraph.SemanticGraphEdge;
 import lombok.RequiredArgsConstructor;
 import org.example.domain.entity.UserEntity;
 import org.example.domain.entity.VoiceCommandEntity;
+import org.example.domain.request.ExpenseRequest;
 import org.example.domain.response.BaseResponse;
 import org.example.domain.response.ExpenseResponse;
 import org.example.domain.response.VoiceCommandResponse;
@@ -22,6 +27,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,29 +37,31 @@ public class VoiceCommandService {
     private final UserRepository userRepository;
     private final VoiceCommandRepository voiceCommandRepository;
     private final ExpenseService expenseService;
-    private final StanfordCoreNLP stanfordCoreNLP;
+    private final StanfordCoreNLP pipeline;
     private final AssemblyAI assembly;
     private final Storage storage;
 
     @Value("${google.cloud.bucket.name}")
     private String BUCKET_NAME;
 
-
-    private static final Set<String> CURRENCY_WORDS =
-            Set.of("dollars", "euros", "pounds", "dollar", "euro", "pound");
-    private static final Set<String> MEASUREMENT_WORDS =
-            Set.of("tonne", "tonnes","kilograms", "grams", "liters", "milliliters", "units", "pieces", "kg", "g",
-                    "l", "ml", "kilogram", "gram", "liter", "milliliter", "unit", "piece");
-
+    private final Set<String> productVerbs = Set.of( "buy", "purchase", "take", "get", "review", "use");
+    private final Pattern quantityPattern = Pattern.compile(
+            "\\b(\\d+(?:[.,]\\d+)?)\\s*(tonne|tonnes|unit|piece|pieces|units|kilogram|gram|milligram|kg|kilograms|g|grams|mg|milligrams|l|liter|liters|ml|milliliters)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+    private final Pattern pricePattern = Pattern.compile(
+            "([$€£¥])\\s*(\\d+(?:[.,]\\d+)?)|(\\d+(?:[.,]\\d+)?)\\s*(dollars|euros|pounds|yen)",
+            Pattern.CASE_INSENSITIVE
+    );
 
     public BaseResponse<VoiceCommandResponse> comprehend(UUID userId, MultipartFile file) {
-        Optional<UserEntity> user = userRepository.findById(userId);
-        if (user.isEmpty()) {
-            return BaseResponse.<VoiceCommandResponse>builder()
-                    .status(400)
-                    .message("User not found")
-                    .build();
-        }
+//        Optional<UserEntity> user = userRepository.findById(UUID.fromString("7a7f4e2f-caa9-41d4-a6e2-8ac6a56b3b98"));
+//        if (user.isEmpty()) {
+//            return BaseResponse.<VoiceCommandResponse>builder()
+//                    .status(400)
+//                    .message("User not found")
+//                    .build();
+//        }
 
         String url;
         try {
@@ -72,23 +82,23 @@ public class VoiceCommandService {
 
         String rawText = transcript.getText().get();
 
-        Map<String, List<String>> extracted = analyzeText(rawText);
+        List<ExpenseRequest> extracted = extractProductInfo(rawText);
 
-        return save(extracted, user.get(), rawText);
+        return new BaseResponse<>();
+//        return save(extracted, user.get(), rawText);
     }
 
-    private BaseResponse<VoiceCommandResponse> save(Map<String, List<String>> extracted, UserEntity user, String rawText) {
-        List<String> products = extracted.get("PRODUCT");
-        List<String> quantities = extracted.get("QUANTITY");
-        List<String> prices = extracted.get("PRICE");
-        int p = products.size(), q = quantities.size(), pr = prices.size();
+    private String uploadAudioIntoCloud(MultipartFile file) throws IOException {
+        String fileName = "audio/" + file.getOriginalFilename();
+        BlobId blobId = BlobId.of(BUCKET_NAME, fileName);
+        BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
+        storage.create(blobInfo, file.getBytes());
 
-        if (p == 0 && q == 0 && pr == 0 || p != q || p != pr) return BaseResponse.<VoiceCommandResponse>builder()
-                .message("The command couldn't have been recognized, please record yourself accurately!")
-                .status(400)
-                .build();
+        return String.format("https://storage.googleapis.com/%s/%s", BUCKET_NAME, fileName);
+    }
 
-        BaseResponse<List<ExpenseResponse>> response = expenseService.save(products, quantities, prices, user);
+    private BaseResponse<VoiceCommandResponse> save(List<ExpenseRequest> extracted, UserEntity user, String rawText) {
+        BaseResponse<List<ExpenseResponse>> response = expenseService.save(extracted, user);
 
         for (ExpenseResponse resp : response.getData()) {
             VoiceCommandEntity command = VoiceCommandEntity.builder()
@@ -106,68 +116,180 @@ public class VoiceCommandService {
                 .build();
     }
 
-    private String uploadAudioIntoCloud(MultipartFile file) throws IOException {
-        String fileName = "audio/" + file.getOriginalFilename();
-        BlobId blobId = BlobId.of(BUCKET_NAME, fileName);
-        BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
-        storage.create(blobInfo, file.getBytes());
+    // ---EXTRACTION LOGIC---
 
-        return String.format("https://storage.googleapis.com/%s/%s", BUCKET_NAME, fileName);
+    public List<ExpenseRequest> extractProductInfo(String text) {
+        List<ExpenseRequest> productInfoList = new ArrayList<>();
+        CoreDocument document = new CoreDocument(text);
+        pipeline.annotate(document);
+
+        for (CoreSentence sentence : document.sentences()) {
+            if (hasVerbs(sentence)) {
+                productInfoList.addAll(extractFromVerbSentence(sentence));
+            } else {
+                productInfoList.addAll(extractFromNounPhrase(sentence));
+            }
+        }
+        return productInfoList;
     }
 
-    public Map<String, List<String>> analyzeText(String text) {
-        CoreDocument coreDocument = new CoreDocument(text);
-        stanfordCoreNLP.annotate(coreDocument);
-        List<CoreLabel> coreLabels = coreDocument.tokens();
-
-        Map<String, List<String>> extractedData = new HashMap<>();
-        extractedData.put("PRODUCT", new ArrayList<>());
-        extractedData.put("PRICE", new ArrayList<>());
-        extractedData.put("QUANTITY", new ArrayList<>());
-
-        for (int i = 0; i < coreLabels.size(); i++) {
-            CoreLabel token = coreLabels.get(i);
-            String word = token.originalText();
-            String posTag = token.get(CoreAnnotations.PartOfSpeechAnnotation.class);
-            String nerTag = token.get(CoreAnnotations.NamedEntityTagAnnotation.class);
-
-            if ("PRODUCT".equalsIgnoreCase(nerTag) || (posTag.startsWith("NN")
-                    && !CURRENCY_WORDS.contains(word) && !MEASUREMENT_WORDS.contains(word))) {
-                if (i-1 >= 0 && coreLabels.get(i - 1).get(CoreAnnotations.PartOfSpeechAnnotation.class).equals("JJ")) {
-                    String prevAdjWord = coreLabels.get(i - 1).word();
-                    extractedData.get("PRODUCT").add(prevAdjWord + " " + word);
-                } else {
-                    extractedData.get("PRODUCT").add(word);
-                }
+    /**
+     * this method is for finding a verb from a text,
+     * it uses CoreLabel class which represents a single word with its annotation e.g.(NN-noun, VB-verb)
+     * @param sentence
+     * @return
+     */
+    private boolean hasVerbs(CoreSentence sentence) {
+        for (CoreLabel token : sentence.tokens()) {
+            if (token.get(CoreAnnotations.PartOfSpeechAnnotation.class).startsWith("VB")) {
+                return true;
             }
+        }
+        return false;
+    }
 
-            if ("MONEY".equalsIgnoreCase(nerTag)) {
-                if (i < coreLabels.size() - 1) {
-                    String nextWord = coreLabels.get(i + 1).originalText();
-                    if (nextWord.matches("\\d+")) {
-                        extractedData.get("PRICE").add(nextWord + word);
-                        i++;
+    /**
+     * this method helps to extract some key information such as product name, quantity, price.
+     * --------
+     * sentence.dependencyParse(); -> represents the grammatical structure of a sentence (e.g. subject-verb, verb-object).
+     * --------
+     * sentence.text() -> just a raw text for the extraction of quantity and price.
+     * --------
+     * edge.getRelation() -> type of dependency ("nsubj" - subject, "obj" - object), if the relation is "obj", it
+     * connects a verb to its object ("bought" -> "laptop" in "I bought a laptop"). In brief, it focuses on verb-obj
+     * relationships to easily find product names.
+     * --------
+     * IndexedWord verb = edge.getGovernor() -> governor is the verb we are looking for, and the lemma helps to get
+     * the base form of a verb, for example if the verb is "bought" it becomes "buy" and we check this verb from the set "productVerbs"
+     * which includes shopping related verbs.
+     * --------
+     * IndexedWord obj = edge.getDependent(); -> dependent is the object (e.g. "laptop").
+     * --------
+     * getConjoinedNouns(obj, dependencies); -> that finds all object-related nouns (e.g. "logitech mouse" or "mouse and laptop")
+     * --------
+     * extractModifiers(head, dependencies); -> gets words with their modifiers if they exist (e.g. "red apple", "new laptop")
+     * and after that the result list is sorted to get the right order of product name
+     * --------
+     * in the end, found modifiers and nouns are merged together.
+     * @param sentence
+     * @return
+     */
+    private List<ExpenseRequest> extractFromVerbSentence(CoreSentence sentence) {
+        List<ExpenseRequest> productInfoList = new ArrayList<>();
+        SemanticGraph dependencies = sentence.dependencyParse();
+        String sentenceText = sentence.text();
+
+        for (SemanticGraphEdge edge : dependencies.edgeListSorted()) {
+            if (edge.getRelation().toString().equals("obj")) {
+                IndexedWord verb = edge.getGovernor();
+                if (productVerbs.contains(verb.lemma())) {
+                    IndexedWord obj = edge.getDependent();
+                    List<IndexedWord> heads = getConjoinedNouns(obj, dependencies);
+                    for (IndexedWord head : heads) {
+                        List<IndexedWord> productWords = extractModifiers(head, dependencies);
+                        productWords.sort(Comparator.comparing(IndexedWord::index));
+                        String productName = productWords.stream()
+                                .map(IndexedWord::word)
+                                .collect(Collectors.joining(" "));
+                        String quantity = extractQuantity(sentenceText);
+                        String price = extractPrice(sentenceText);
+                        productInfoList.add(new ExpenseRequest(productName, price, quantity));
                     }
                 }
-            } else if (CURRENCY_WORDS.contains(word)) {
-                if (i < coreLabels.size() - 1) {
-                    String nextWord = coreLabels.get(i + 1).originalText();
-                    if (nextWord.matches("\\d+")) {
-                        extractedData.get("PRICE").add(word + nextWord);
-                        i++;
-                    }
-                }
             }
+        }
+        return productInfoList;
+    }
 
-            if ("NUMBER".equalsIgnoreCase(nerTag) && i < coreLabels.size() - 1) {
-                String nextWord = coreLabels.get(i + 1).originalText().toLowerCase();
-                if (MEASUREMENT_WORDS.contains(nextWord)) {
-                    extractedData.get("QUANTITY").add(word + " " + nextWord);
-                    i++;
+    /**
+     * if an input doesn't have any verbs for example -> "5kg rice for $20", this method will get invoked.
+     * --------
+     * IndexedWord root = dependencies.getFirstRoot(); -> is the noun (e.g. rice) in a noun-based sentence
+     * @param sentence
+     * @return
+     */
+    private List<ExpenseRequest> extractFromNounPhrase(CoreSentence sentence) {
+        List<ExpenseRequest> productInfoList = new ArrayList<>();
+        SemanticGraph dependencies = sentence.dependencyParse();
+        IndexedWord root = dependencies.getFirstRoot();
+        String sentenceText = sentence.text();
+
+        if (root != null) {
+            List<IndexedWord> heads = getConjoinedNouns(root, dependencies);
+            for (IndexedWord head : heads) {
+                List<IndexedWord> productWords = extractModifiers(head, dependencies);
+                productWords.sort(Comparator.comparing(IndexedWord::index));
+                String productName = productWords.stream()
+                        .map(IndexedWord::word)
+                        .collect(Collectors.joining(" "));
+                String quantity = extractQuantity(sentenceText);
+                String price = extractPrice(sentenceText);
+                productInfoList.add(new ExpenseRequest(productName, price, quantity));
+            }
+        }
+        return productInfoList;
+    }
+
+    /**
+     * "amod" -> checks for adjectives, "compound" -> checks for noun (e.g. "laptop" in "laptop bag")
+     * @param head
+     * @param dependencies
+     * @return
+     */
+    private List<IndexedWord> extractModifiers(IndexedWord head, SemanticGraph dependencies) {
+        List<IndexedWord> modifiers = new ArrayList<>();
+        Set<String> relations = new HashSet<>(Arrays.asList("amod", "compound"));
+        Set<String> quantityWords = Set.of(
+                "tonne","tonnes","unit","piece","pieces","units","kilogram",
+                "gram","milligram","kg","kilograms","g","grams","mg","milligrams",
+                "l","liter","liters","ml","milliliters");
+
+        modifiers.add(head);
+
+        for (SemanticGraphEdge edge : dependencies.outgoingEdgeList(head)) {
+            String relation = edge.getRelation().toString();
+            if (relations.contains(relation)) {
+                IndexedWord dependent = edge.getDependent();
+                if (!modifiers.contains(dependent) && !quantityWords.contains(dependent.word().toLowerCase())) {
+                    modifiers.add(dependent);
                 }
             }
         }
 
-        return extractedData;
+        return modifiers;
+    }
+
+    /**
+     * helps to get nouns like -> "mouse and laptop"
+     * @param noun
+     * @param dependencies
+     * @return
+     */
+    private List<IndexedWord> getConjoinedNouns(IndexedWord noun, SemanticGraph dependencies) {
+        List<IndexedWord> conjoined = new ArrayList<>();
+        Set<String> tags = Set.of("NN", "NNS", "NNP", "NNPS");
+        conjoined.add(noun);
+        for (SemanticGraphEdge edge : dependencies.outgoingEdgeList(noun)) {
+            if (edge.getRelation().toString().equals("conj") && tags.contains(edge.getDependent().tag())) {
+                conjoined.add(edge.getDependent());
+            }
+        }
+        return conjoined;
+    }
+
+    private String extractQuantity(String text) {
+        Matcher matcher = quantityPattern.matcher(text);
+        if (matcher.find()) {
+            return matcher.group();
+        }
+        return null;
+    }
+
+    private String extractPrice(String text) {
+        Matcher matcher = pricePattern.matcher(text);
+        if (matcher.find()) {
+            return matcher.group();
+        }
+        return null;
     }
 }

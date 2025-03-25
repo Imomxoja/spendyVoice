@@ -7,21 +7,21 @@ import java.util.Map;
 
 @Getter
 public enum Currency {
-    DOLLAR("usd", "$", "dollar", "dollars"),
-    EURO("eur", "€", "euro", "euros"),
-    POUND("gbp", "£", "pound", "pounds");
+    DOLLAR("USD", "$", "dollar", "dollars"),
+    EURO("EUR", "€", "euro", "euros"),
+    POUND("GBP", "£", "pound", "pounds");
 
     private final String code;
     private final String symbol;
     private final String[] names;
 
-    private static final Map<String, Currency> LOOKUP_MAP = new HashMap<>();
+    private static final Map<String, String> LOOKUP_MAP = new HashMap<>();
 
     static {
         for (Currency currency : Currency.values()) {
-            LOOKUP_MAP.put(currency.symbol, currency);
+            LOOKUP_MAP.put(currency.symbol, currency.code);
             for (String name : currency.names) {
-                LOOKUP_MAP.put(name.toLowerCase(), currency);
+                LOOKUP_MAP.put(name.toLowerCase(), currency.code);
             }
         }
     }
@@ -32,7 +32,7 @@ public enum Currency {
         this.names = names;
     }
 
-    public static Currency fromString(String input) {
+    public static String fromString(String input) {
         return LOOKUP_MAP.get(input.toLowerCase());
     }
 }

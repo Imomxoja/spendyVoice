@@ -84,7 +84,7 @@ public class BeanConfig {
     @Bean
     public StanfordCoreNLP config() {
         Properties properties = new Properties();
-        properties.setProperty("annotators", "tokenize,ssplit,pos,lemma,ner");
+        properties.setProperty("annotators", "tokenize, ssplit, pos, lemma, depparse");
         properties.setProperty("sutime.binders", "0");
         return new StanfordCoreNLP(properties);
     }
