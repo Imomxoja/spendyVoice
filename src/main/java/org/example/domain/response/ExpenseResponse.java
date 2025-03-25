@@ -15,7 +15,8 @@ public class ExpenseResponse {
     private UUID id;
     private String product;
     private String quantity;
-    private Double price;
+    private String price;
     private UserEntity user;
+    private String currency;
     private VoiceCommandEntity voiceCommand;
 }

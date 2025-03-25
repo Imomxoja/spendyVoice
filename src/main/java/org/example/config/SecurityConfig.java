@@ -24,7 +24,8 @@ public class SecurityConfig {
         return http.csrf()
                 .disable()
                 .authorizeRequests()
-                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/authenticate", "/command/input").permitAll()
+                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/authenticate", "/command/input"
+                , "/expense/exchange").permitAll()
                 .anyRequest().authenticated()
 //                .and().formLogin().loginPage("").defaultSuccessUrl("")
 //                .permitAll()

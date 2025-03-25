@@ -19,8 +19,8 @@ import org.example.domain.entity.VoiceCommandEntity;
 public class ExpenseEntity extends BaseEntity {
     private String product;
     private String quantity;
-    private Double price;
-    private Currency currency;
+    private String price;
+    private String currency;
     @ManyToOne
     @JoinColumn(name = "user_id")
     private UserEntity user;
