@@ -23,6 +23,10 @@ import org.example.repository.UserRepository;
 import org.example.repository.VoiceCommandRepository;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
@@ -291,5 +295,30 @@ public class VoiceCommandService {
             return matcher.group();
         }
         return null;
+    }
+
+    public Page<VoiceCommandResponse> getAll(UUID userId, int page, int size) {
+        Pageable pagination = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<VoiceCommandEntity> commands = voiceCommandRepository.getAll(userId, pagination);
+
+        return commands.map(command -> VoiceCommandResponse.builder()
+                .id(command.getId())
+                .user(command.getUser())
+                .rawText(command.getRawText())
+                .expense(command.getExpense())
+                .createdDate(command.getCreatedDate())
+                .build()
+        );
+    }
+
+    public BaseResponse<VoiceCommandResponse> delete(UUID voiceCommandID) {
+        Optional<VoiceCommandEntity> command = voiceCommandRepository.findById(voiceCommandID);
+        if (command.isEmpty()) return BaseResponse.<VoiceCommandResponse>builder()
+                .message("Command not found").status(400).build();
+
+        voiceCommandRepository.deleteById(voiceCommandID);
+
+        return BaseResponse.<VoiceCommandResponse>builder()
+                .message("Deleted successfully").status(200).build();
     }
 }

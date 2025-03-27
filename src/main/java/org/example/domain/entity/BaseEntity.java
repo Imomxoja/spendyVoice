@@ -22,11 +22,11 @@ public abstract class BaseEntity {
     protected UUID id;
     @CreationTimestamp
     @Temporal(TemporalType.TIMESTAMP)
-    @DateTimeFormat(pattern = "dd/MM/yyyy HH:mm:ss")
+    @DateTimeFormat(pattern = "dd/MM/yyyy HH:mm")
     protected LocalDateTime createdDate;
     @LastModifiedDate
     @Temporal(TemporalType.TIMESTAMP)
-    @DateTimeFormat(pattern = "dd/MM/yyyy HH:mm:ss")
+    @DateTimeFormat(pattern = "dd/MM/yyyy HH:mm")
     protected LocalDateTime modifiedDate;
     @CreatedBy
     protected String createdBy;

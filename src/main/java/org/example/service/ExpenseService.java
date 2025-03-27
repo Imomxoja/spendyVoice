@@ -10,6 +10,10 @@ import org.example.domain.response.ExpenseResponse;
 import org.example.repository.ExpenseRepository;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
@@ -151,5 +155,33 @@ public class ExpenseService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    public Page<ExpenseResponse> getAll(UUID id, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<ExpenseEntity> expenses = expenseRepository.getAll(id, pageable);
+
+        return expenses.map(expense -> ExpenseResponse.builder()
+                .user(expense.getUser())
+                .quantity(expense.getQuantity())
+                .product(expense.getProduct())
+                .id(expense.getId())
+                .price(expense.getPrice())
+                .currency(expense.getCurrency())
+                .voiceCommand(expense.getVoiceCommand())
+                .createdDate(expense.getCreatedDate())
+                .build());
+    }
+
+    public BaseResponse<ExpenseResponse> deleteExpense(UUID expenseId) {
+        Optional<ExpenseEntity> expense = findById(expenseId);
+        if (expense.isEmpty())
+            return BaseResponse.<ExpenseResponse>builder().status(400).message("Expense not found").build();
+
+        expenseRepository.deleteById(expenseId);
+        return BaseResponse.<ExpenseResponse>builder()
+                .status(200)
+                .message("Deleted successfully")
+                .build();
     }
 }

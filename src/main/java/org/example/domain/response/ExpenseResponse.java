@@ -4,6 +4,7 @@ import lombok.*;
 import org.example.domain.entity.UserEntity;
 import org.example.domain.entity.VoiceCommandEntity;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Getter
@@ -19,4 +20,5 @@ public class ExpenseResponse {
     private UserEntity user;
     private String currency;
     private VoiceCommandEntity voiceCommand;
+    private LocalDateTime createdDate;
 }
