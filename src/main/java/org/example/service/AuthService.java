@@ -1,7 +1,7 @@
 package org.example.service;
 
 import lombok.RequiredArgsConstructor;
-import org.example.domain.entity.UserEntity;
+import org.example.domain.entity.user.UserEntity;
 import org.example.domain.request.UserRequest;
 import org.example.domain.response.AuthenticationResponse;
 import org.example.domain.response.BaseResponse;
@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import static org.example.domain.entity.user.Role.USER;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +36,7 @@ public class AuthService {
                 .fullName(request.getFullName())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .email(request.getEmail())
+                .role(USER)
                 .build();
 
         repository.save(userEntity);
@@ -53,7 +55,6 @@ public class AuthService {
                     new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
             );
         } catch (Exception e) {
-            e.printStackTrace(); // Print the real authentication error
             return BaseResponse.<AuthenticationResponse>builder()
                     .message("Authentication failed: " + e.getMessage())
                     .status(403)

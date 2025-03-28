@@ -3,6 +3,7 @@ package org.example.domain.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.domain.entity.expense.ExpenseEntity;
+import org.example.domain.entity.user.UserEntity;
 
 @Entity(name = "commands")
 @Getter

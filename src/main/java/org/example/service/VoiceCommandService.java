@@ -2,7 +2,6 @@ package org.example.service;
 
 import com.assemblyai.api.AssemblyAI;
 import com.assemblyai.api.resources.transcripts.types.Transcript;
-import com.google.auth.oauth2.ServiceAccountCredentials;
 import com.google.cloud.storage.*;
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreLabel;
@@ -13,7 +12,7 @@ import edu.stanford.nlp.pipeline.StanfordCoreNLP;
 import edu.stanford.nlp.semgraph.SemanticGraph;
 import edu.stanford.nlp.semgraph.SemanticGraphEdge;
 import lombok.RequiredArgsConstructor;
-import org.example.domain.entity.UserEntity;
+import org.example.domain.entity.user.UserEntity;
 import org.example.domain.entity.VoiceCommandEntity;
 import org.example.domain.request.ExpenseRequest;
 import org.example.domain.response.BaseResponse;

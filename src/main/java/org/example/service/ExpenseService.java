@@ -1,7 +1,7 @@
 package org.example.service;
 
 import lombok.RequiredArgsConstructor;
-import org.example.domain.entity.UserEntity;
+import org.example.domain.entity.user.UserEntity;
 import org.example.domain.entity.expense.Currency;
 import org.example.domain.entity.expense.ExpenseEntity;
 import org.example.domain.request.ExpenseRequest;
