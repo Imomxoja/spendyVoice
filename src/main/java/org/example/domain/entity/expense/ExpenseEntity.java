@@ -7,7 +7,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import lombok.*;
 import org.example.domain.entity.BaseEntity;
-import org.example.domain.entity.UserEntity;
+import org.example.domain.entity.user.UserEntity;
 import org.example.domain.entity.VoiceCommandEntity;
 
 @Entity(name = "expenses")

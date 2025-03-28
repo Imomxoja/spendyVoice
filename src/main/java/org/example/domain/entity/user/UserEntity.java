@@ -1,13 +1,12 @@
-package org.example.domain.entity;
+package org.example.domain.entity.user;
 
 import jakarta.persistence.Entity;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import lombok.*;
+import org.example.domain.entity.BaseEntity;
+import org.example.domain.entity.VoiceCommandEntity;
 import org.example.domain.entity.expense.ExpenseEntity;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
@@ -22,6 +21,7 @@ public class UserEntity extends BaseEntity implements UserDetails {
     private String fullName;
     private String password;
     private String email;
+    private Role role;
     @OneToMany(mappedBy = "user")
     private List<ExpenseEntity> expenses;
     @OneToMany(mappedBy = "user")
@@ -29,7 +29,7 @@ public class UserEntity extends BaseEntity implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        return role.getAuthorities();
     }
 
     @Override

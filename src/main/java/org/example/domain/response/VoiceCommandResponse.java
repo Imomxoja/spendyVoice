@@ -1,7 +1,7 @@
 package org.example.domain.response;
 
 import lombok.*;
-import org.example.domain.entity.UserEntity;
+import org.example.domain.entity.user.UserEntity;
 import org.example.domain.entity.expense.ExpenseEntity;
 
 import java.time.LocalDateTime;
