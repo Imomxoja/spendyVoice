@@ -12,6 +12,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.Stack;
+
 import static org.example.domain.entity.user.Role.USER;
 
 @Service
@@ -23,6 +25,11 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
 
     public BaseResponse<AuthenticationResponse> register(UserRequest request) {
+        BaseResponse<AuthenticationResponse> response = checkIfCredentialsAreValid(request.getPassword(),
+                request.getEmail(), request.getFullName());
+
+        if (response.getStatus() == 400) return response;
+
         Optional<UserEntity> user = repository.findByEmail(request.getEmail());
 
         if (user.isPresent()) {
@@ -47,6 +54,44 @@ public class AuthService {
                 .status(200)
                 .message("User successfully created")
                 .build();
+    }
+
+    public BaseResponse<AuthenticationResponse> checkIfCredentialsAreValid(String password, String email, String fullName) {
+        StringBuilder message = new StringBuilder();
+        Stack<String> messageStack = new Stack<>();
+
+        if (!email.matches("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*$")) {
+            messageStack.push("Email");
+        }
+        if (!password.matches("^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z]).{8,}$")) {
+            if (messageStack.isEmpty()) messageStack.push("Password");
+            else {
+                messageStack.push(",");
+                messageStack.push("password");
+            }
+        }
+        if (fullName.isBlank()) {
+            if (messageStack.isEmpty()) messageStack.push("Fullname");
+            else {
+                messageStack.push("and");
+                messageStack.push("fullname");
+            }
+        }
+
+        if (messageStack.size() == 1) {
+            message.append(messageStack.pop()).append(" is not valid");
+        } else if (messageStack.size() > 1) {
+            while (!messageStack.isEmpty()) {
+                if (messageStack.peek().equals(",")) message.insert(0, messageStack.pop());
+                else message.insert(0, " " + messageStack.pop());
+            }
+            message.append(" are not valid");
+        }
+
+        return message.isEmpty() ?
+                BaseResponse.<AuthenticationResponse>builder().status(200).build()
+                :
+                BaseResponse.<AuthenticationResponse>builder().status(400).message(message.toString()).build();
     }
 
     public BaseResponse<AuthenticationResponse> authenticate(UserRequest request) {
