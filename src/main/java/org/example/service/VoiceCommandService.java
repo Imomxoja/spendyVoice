@@ -49,11 +49,11 @@ public class VoiceCommandService {
 
     private final Set<String> productVerbs = Set.of( "buy", "purchase", "take", "get", "review", "use");
     private final Pattern quantityPattern = Pattern.compile(
-            "\\b(\\d+(?:[.,]\\d+)?)\\s*(tonne|tonnes|unit|piece|pieces|units|kilogram|gram|milligram|kg|kilograms|g|grams|mg|milligrams|l|liter|liters|ml|milliliters)\\b",
+            "\\b(\\d+(?:[.,]\\d+)?)\\s*(tonne|tonnes|unit|piece|pieces|units|pound|pounds|kilogram|gram|milligram|kg|kilograms|g|grams|mg|milligrams|l|liter|liters|ml|milliliters)\\b",
             Pattern.CASE_INSENSITIVE
     );
     private final Pattern pricePattern = Pattern.compile(
-            "([$€£¥])\\s*(\\d+(?:[.,]\\d+)?)|(\\d+(?:[.,]\\d+)?)\\s*(dollars|euros|pounds|yen)",
+            "([$€£¥])\\s*(\\d+(?:[.,]\\d+)?)|(\\d+(?:[.,]\\d+)?)\\s*(dollars|bucks|euros|pounds|yen)",
             Pattern.CASE_INSENSITIVE
     );
 
