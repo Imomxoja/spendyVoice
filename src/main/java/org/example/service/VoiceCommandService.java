@@ -53,7 +53,7 @@ public class VoiceCommandService {
             Pattern.CASE_INSENSITIVE
     );
     private final Pattern pricePattern = Pattern.compile(
-            "([$€£¥])\\s*(\\d+(?:[.,]\\d+)?)|(\\d+(?:[.,]\\d+)?)\\s*(dollars|bucks|euros|pounds|yen)",
+            "([$€£¥])\\s*(\\d+(?:[.,]\\d+)?)|(\\d+(?:[.,]\\d+)?)\\s*(dollars|grands|bucks|euros|pounds|yen)",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -142,7 +142,7 @@ public class VoiceCommandService {
      * @param sentence
      * @return
      */
-    private boolean hasVerbs(CoreSentence sentence) {
+    public boolean hasVerbs(CoreSentence sentence) {
         for (CoreLabel token : sentence.tokens()) {
             if (token.get(CoreAnnotations.PartOfSpeechAnnotation.class).startsWith("VB")) {
                 return true;
@@ -177,7 +177,7 @@ public class VoiceCommandService {
      * @param sentence
      * @return
      */
-    private List<ExpenseRequest> extractFromVerbSentence(CoreSentence sentence) {
+    public List<ExpenseRequest> extractFromVerbSentence(CoreSentence sentence) {
         List<ExpenseRequest> productInfoList = new ArrayList<>();
         SemanticGraph dependencies = sentence.dependencyParse();
         String sentenceText = sentence.text();
@@ -211,7 +211,7 @@ public class VoiceCommandService {
      * @param sentence
      * @return
      */
-    private List<ExpenseRequest> extractFromNounPhrase(CoreSentence sentence) {
+    public List<ExpenseRequest> extractFromNounPhrase(CoreSentence sentence) {
         List<ExpenseRequest> productInfoList = new ArrayList<>();
         SemanticGraph dependencies = sentence.dependencyParse();
         IndexedWord root = dependencies.getFirstRoot();
@@ -239,7 +239,7 @@ public class VoiceCommandService {
      * @param dependencies
      * @return
      */
-    private List<IndexedWord> extractModifiers(IndexedWord head, SemanticGraph dependencies) {
+    public List<IndexedWord> extractModifiers(IndexedWord head, SemanticGraph dependencies) {
         List<IndexedWord> modifiers = new ArrayList<>();
         Set<String> relations = new HashSet<>(Arrays.asList("amod", "compound"));
         Set<String> quantityWords = Set.of(
@@ -268,7 +268,7 @@ public class VoiceCommandService {
      * @param dependencies
      * @return
      */
-    private List<IndexedWord> getConjoinedNouns(IndexedWord noun, SemanticGraph dependencies) {
+    public List<IndexedWord> getConjoinedNouns(IndexedWord noun, SemanticGraph dependencies) {
         List<IndexedWord> conjoined = new ArrayList<>();
         Set<String> tags = Set.of("NN", "NNS", "NNP", "NNPS");
         conjoined.add(noun);
@@ -280,7 +280,7 @@ public class VoiceCommandService {
         return conjoined;
     }
 
-    private String extractQuantity(String text) {
+    public String extractQuantity(String text) {
         Matcher matcher = quantityPattern.matcher(text);
         if (matcher.find()) {
             return matcher.group();
@@ -288,7 +288,7 @@ public class VoiceCommandService {
         return null;
     }
 
-    private String extractPrice(String text) {
+    public String extractPrice(String text) {
         Matcher matcher = pricePattern.matcher(text);
         if (matcher.find()) {
             return matcher.group();
