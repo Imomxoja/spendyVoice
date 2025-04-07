@@ -1,9 +1,17 @@
 package org.example.service;
 
+import com.assemblyai.api.AssemblyAI;
+import com.assemblyai.api.PollingTranscriptsClient;
+import com.assemblyai.api.resources.transcripts.types.Transcript;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Storage;
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.ling.IndexedWord;
+import edu.stanford.nlp.pipeline.CoreDocument;
 import edu.stanford.nlp.pipeline.CoreSentence;
+import edu.stanford.nlp.pipeline.StanfordCoreNLP;
 import edu.stanford.nlp.semgraph.SemanticGraph;
 import edu.stanford.nlp.semgraph.SemanticGraphEdge;
 import edu.stanford.nlp.trees.GrammaticalRelation;
@@ -13,6 +21,7 @@ import org.example.domain.entity.user.UserEntity;
 import org.example.domain.request.ExpenseRequest;
 import org.example.domain.response.BaseResponse;
 import org.example.domain.response.VoiceCommandResponse;
+import org.example.repository.UserRepository;
 import org.example.repository.VoiceCommandRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +34,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -40,9 +51,20 @@ class VoiceCommandServiceTest {
     @Spy
     @InjectMocks
     private VoiceCommandService voiceCommandService;
-
     @Mock
     private VoiceCommandRepository repository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private ExpenseService expenseService;
+    @Mock
+    private StanfordCoreNLP pipeline;
+    @Mock
+    private AssemblyAI assembly;
+    @Mock
+    private Storage storage;
+    @Mock
+    private MultipartFile file;
 
     private VoiceCommandEntity command;
 
@@ -335,7 +357,7 @@ class VoiceCommandServiceTest {
         CoreLabel verbToken = mock(CoreLabel.class);
 
         when(sentence.tokens()).thenReturn(List.of(verbToken));
-        when(verbToken.get(CoreAnnotations.PartOfSpeechAnnotation.class)).thenReturn("VB");
+        when(verbToken.get(CoreAnnotations.PartOfSpeechAnnotation.class)).thenReturn("VB ");
 
         boolean result = voiceCommandService.hasVerbs(sentence);
 
@@ -355,4 +377,99 @@ class VoiceCommandServiceTest {
         assertFalse(result);
     }
 
+    @Test
+    public void uploadAudioIntoCloud_WhenFileIsNull() throws Exception {
+        String res = voiceCommandService.uploadAudioIntoCloud(null);
+
+        assertEquals("", res);
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    public void uploadAudioIntoCloud_ValidFile_ReturnsValidURL() throws Exception {
+        String BUCKET_NAME = "spendyVoice-bucket";
+        String fileName = "audio/test.mp3";
+
+        voiceCommandService.setBUCKET_NAME_OnlyForTesting(BUCKET_NAME);
+        when(file.getOriginalFilename()).thenReturn("test.mp3");
+        when(file.getBytes()).thenReturn(new byte[]{1,2,3});
+
+        String result = voiceCommandService.uploadAudioIntoCloud(file);
+
+        String url = String.format("https://storage.googleapis.com/%s/%s", BUCKET_NAME, fileName);
+        assertEquals(url, result);
+
+        BlobId expectedBlobId = BlobId.of(BUCKET_NAME, fileName);
+        BlobInfo expectedBlobInfo = BlobInfo.newBuilder(expectedBlobId).build();
+        verify(storage, times(1)).create(eq(expectedBlobInfo), eq(new byte[]{1, 2, 3}));
+    }
+
+    @Test
+    public void comprehend_UserIdNotFound() {
+        UUID userId = UUID.randomUUID();
+
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        BaseResponse<VoiceCommandResponse> res = voiceCommandService.comprehend(userId, file);
+
+        assertEquals(400, res.getStatus());
+        assertEquals("User not found", res.getMessage());
+    }
+
+    @Test
+    public void comprehend_WhenFileIsNull_ReturnsEmptyString() throws IOException {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(UserEntity.builder().build()));
+
+        doReturn("").when(voiceCommandService).uploadAudioIntoCloud(file);
+
+        BaseResponse<VoiceCommandResponse> res = voiceCommandService.comprehend(userId, file);
+
+        assertEquals(400, res.getStatus());
+        assertEquals("Voice couldn't be recognized", res.getMessage());
+    }
+
+    @Test
+    public void comprehend_FailsToGetUrl_ThrowsException() throws IOException {
+        UUID userId = UUID.randomUUID();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(UserEntity.builder().build()));
+
+        doThrow(new IOException("Failed to upload audio")).when(voiceCommandService).uploadAudioIntoCloud(file);
+
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> voiceCommandService.comprehend(userId, file));
+
+        assertInstanceOf(IOException.class, exception.getCause());
+        assertEquals("Failed to upload audio", exception.getCause().getMessage());
+
+        verify(userRepository, times(1)).findById(userId);
+        verify(voiceCommandService, times(1)).uploadAudioIntoCloud(file);
+        verifyNoInteractions(assembly);
+    }
+
+    @Test
+    public void comprehend_FailsToTranscribeURL_ReturnsEmptyText() throws IOException {
+        UUID userId = UUID.randomUUID();
+        String BUCKET_NAME = "spendyVoice-bucket";
+        Transcript transcript = mock(Transcript.class);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(UserEntity.builder().build()));
+
+        String url = "audio/test.mp3";
+
+        voiceCommandService.setBUCKET_NAME_OnlyForTesting(BUCKET_NAME);
+        when(file.getOriginalFilename()).thenReturn("test.mp3");
+        when(voiceCommandService.uploadAudioIntoCloud(file)).thenReturn(url);
+        when(assembly.transcripts()).thenReturn(mock(PollingTranscriptsClient.class));
+        when(assembly.transcripts().transcribe(url)).thenReturn(transcript);
+        when(transcript.getText()).thenReturn(Optional.empty());
+
+        BaseResponse<VoiceCommandResponse> res = voiceCommandService.comprehend(userId, file);
+
+        assertEquals(400, res.getStatus());
+        assertEquals("Voice couldn't be recognized", res.getMessage());
+        verify(userRepository, times(1)).findById(userId);
+        verify(voiceCommandService, times(1)).uploadAudioIntoCloud(file);
+        verify(assembly.transcripts(), times(1)).transcribe(url);
+        verify(transcript, times(1)).getText();
+        verifyNoInteractions(expenseService, repository);
+    }
 }
