@@ -58,13 +58,13 @@ public class VoiceCommandService {
     );
 
     public BaseResponse<VoiceCommandResponse> comprehend(UUID userId, MultipartFile file) {
-//        Optional<UserEntity> user = userRepository.findById(UUID.fromString("7a7f4e2f-caa9-41d4-a6e2-8ac6a56b3b98"));
-//        if (user.isEmpty()) {
-//            return BaseResponse.<VoiceCommandResponse>builder()
-//                    .status(400)
-//                    .message("User not found")
-//                    .build();
-//        }
+        Optional<UserEntity> user = userRepository.findById(userId);
+        if (user.isEmpty()) {
+            return BaseResponse.<VoiceCommandResponse>builder()
+                    .status(400)
+                    .message("User not found")
+                    .build();
+        }
 
         String url;
         try {
@@ -73,6 +73,11 @@ public class VoiceCommandService {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
+        if (url.isEmpty()) return BaseResponse.<VoiceCommandResponse>builder()
+                .message("Voice couldn't be recognized")
+                .status(400)
+                .build();
 
         Transcript transcript = assembly.transcripts().transcribe(url);
 
@@ -87,11 +92,11 @@ public class VoiceCommandService {
 
         List<ExpenseRequest> extracted = extractProductInfo(rawText);
 
-        return new BaseResponse<>();
-//        return save(extracted, user.get(), rawText);
+        return save(extracted, user.get(), rawText);
     }
 
-    private String uploadAudioIntoCloud(MultipartFile file) throws IOException {
+    public String uploadAudioIntoCloud(MultipartFile file) throws IOException {
+        if (file == null || file.getOriginalFilename() == null) return "";
         String fileName = "audio/" + file.getOriginalFilename();
         BlobId blobId = BlobId.of(BUCKET_NAME, fileName);
         BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
@@ -100,7 +105,7 @@ public class VoiceCommandService {
         return String.format("https://storage.googleapis.com/%s/%s", BUCKET_NAME, fileName);
     }
 
-    private BaseResponse<VoiceCommandResponse> save(List<ExpenseRequest> extracted, UserEntity user, String rawText) {
+    public BaseResponse<VoiceCommandResponse> save(List<ExpenseRequest> extracted, UserEntity user, String rawText) {
         BaseResponse<List<ExpenseResponse>> response = expenseService.save(extracted, user);
 
         for (ExpenseResponse resp : response.getData()) {
@@ -319,5 +324,9 @@ public class VoiceCommandService {
 
         return BaseResponse.<VoiceCommandResponse>builder()
                 .message("Deleted successfully").status(200).build();
+    }
+
+    public void setBUCKET_NAME_OnlyForTesting(String BUCKET_NAME) {
+        this.BUCKET_NAME = BUCKET_NAME;
     }
 }
