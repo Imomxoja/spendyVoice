@@ -29,6 +29,7 @@ public class ExpenseService {
     private static final String BASE_URL = "https://v6.exchangerate-api.com/v6/";
     @Value("${exchange.api}")
     private String API;
+    private final HttpClient httpClient;
 
     public BaseResponse<List<ExpenseResponse>> save(List<ExpenseRequest> expenses, UserEntity user) {
         List<ExpenseResponse> responses = new ArrayList<>();
@@ -127,16 +128,15 @@ public class ExpenseService {
                 .build();
     }
 
-    private String exchangeRate(Double price, String from, String to) {
+    public String exchangeRate(Double price, String from, String to) {
         String url = BASE_URL + API + "/latest/" + from;
-        HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
                 .GET()
                 .build();
 
         try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             JSONObject json = new JSONObject(response.body());
 
             // conversion rates contain all the currencies with the latest rates
