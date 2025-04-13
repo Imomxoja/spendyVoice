@@ -18,7 +18,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -53,8 +52,8 @@ public class ExpenseServiceTest {
                 .voiceCommand(VoiceCommandEntity.builder().build())
                 .product("Tomato")
                 .quantity("2kg")
-                .price("$0.9")
-                .currency("dollar")
+                .price("100.0")
+                .currency("USD")
                 .build();
     }
 
@@ -140,4 +139,94 @@ public class ExpenseServiceTest {
         verify(httpClient).send(argThat(request ->
                 request.uri().equals(URI.create(expectedUrl))), any());
     }
+
+    @Test
+    public void exchangeRate_NoConversionRates_ReturnsNull() throws Exception {
+        when(httpResponse.body()).thenReturn("");
+        doReturn(httpResponse)
+                .when(httpClient)
+                .send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString()));
+
+        String resp = expenseService.exchangeRate(100D, "USD", "EUR");
+
+        assertNull(resp);
+    }
+
+    @Test
+    public void exchangeRate_InvalidCurrency_ReturnsNull() throws Exception {
+        JSONObject conversionRates = new JSONObject();
+        conversionRates.put("EUR", 0.9);
+        JSONObject jsonResponse = new JSONObject();
+        jsonResponse.put("conversion_rates", conversionRates);
+
+        when(httpResponse.body()).thenReturn(jsonResponse.toString());
+        doReturn(httpResponse)
+                .when(httpClient)
+                .send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString()));
+
+        String res = expenseService.exchangeRate(100D, "USD", "ABCDEFG");
+
+        assertNull(res);
+    }
+
+    @Test
+    public void exchangeCurrency_IdNotFound() {
+        UUID id = UUID.randomUUID();
+        when(expenseService.findById(id)).thenReturn(Optional.empty());
+
+        BaseResponse<ExpenseResponse> res = expenseService.exchangeCurrency(id, "EUR");
+
+        assertEquals(400, res.getStatus());
+        assertEquals("Expense wasn't found, please try again!", res.getMessage());
+    }
+
+    @Test
+    public void exchangeCurrency_CodeIsEmpty() {
+        UUID id = UUID.randomUUID();
+        Optional<ExpenseEntity> expenseEntity =
+                Optional.of(ExpenseEntity.builder().build());
+        when(expenseService.findById(id)).thenReturn(expenseEntity);
+
+        BaseResponse<ExpenseResponse> res = expenseService.exchangeCurrency(id, "EUR");
+
+        assertEquals(400, res.getStatus());
+        assertEquals("Couldn't have been exchanged, please try again!", res.getMessage());
+    }
+
+    @Test
+    public void exchangeCurrency_Success() {
+        UUID id = UUID.randomUUID();
+        String currency = "EUR";
+        String convertedPrice = "90.0";
+
+        when(expenseService.findById(id)).thenReturn(Optional.of(expense));
+        doReturn(convertedPrice).when(expenseService).exchangeRate(100.0, "USD", currency);
+        when(expenseRepository.save(any(ExpenseEntity.class))).thenReturn(expense);
+
+        BaseResponse<ExpenseResponse> res = expenseService.exchangeCurrency(id, currency);
+
+        assertEquals(200, res.getStatus());
+        assertEquals("Exchanged successfully", res.getMessage());
+        verify(expenseRepository).findById(id);
+        verify(expenseService).exchangeRate(100.0, "USD", currency);
+        verify(expenseRepository).save(expense);
+        verifyNoInteractions(httpClient);
+    }
+
+    @Test
+    public void exchangeCurrency_FailsToConvert() {
+        UUID id = UUID.randomUUID();
+        String currency = "EUR";
+
+        when(expenseService.findById(id)).thenReturn(Optional.of(expense));
+        doReturn(null).when(expenseService).exchangeRate(100.0, "USD", currency);
+
+        BaseResponse<ExpenseResponse> res = expenseService.exchangeCurrency(id, currency);
+
+        assertEquals(400, res.getStatus());
+        assertEquals("failed to convert", res.getMessage());
+        verify(expenseRepository).findById(id);
+        verify(expenseRepository, never()).save(any());
+    }
+
 }
