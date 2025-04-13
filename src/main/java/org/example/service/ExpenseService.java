@@ -64,7 +64,7 @@ public class ExpenseService {
     }
 
     private String extractPrice(String s) {
-        if (s.isEmpty()) return null;
+        if (s == null || s.isEmpty()) return null;
 
         StringBuilder sb = new StringBuilder();
 
@@ -76,7 +76,7 @@ public class ExpenseService {
     }
 
     private String extractCurrency(String s) {
-        if (s.isEmpty()) return null;
+        if (s == null || s.isEmpty()) return null;
 
         StringBuilder sb = new StringBuilder();
 
@@ -104,7 +104,7 @@ public class ExpenseService {
         ExpenseEntity expenseEntity = expense.get();
         String code = expenseEntity.getCurrency();
 
-        if (code.isEmpty()) return BaseResponse.<ExpenseResponse>builder()
+        if (code == null || code.isEmpty()) return BaseResponse.<ExpenseResponse>builder()
                 .message("Couldn't have been exchanged, please try again!")
                 .status(400)
                 .build();
