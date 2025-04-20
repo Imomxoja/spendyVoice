@@ -19,6 +19,7 @@ public class ExpenseResponse {
     private String price;
     private UserEntity user;
     private String currency;
+    private String category;
     private VoiceCommandEntity voiceCommand;
     private LocalDateTime createdDate;
 }

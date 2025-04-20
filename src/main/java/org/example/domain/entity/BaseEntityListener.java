@@ -2,6 +2,7 @@ package org.example.domain.entity;
 
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 
@@ -19,7 +20,11 @@ public class BaseEntityListener {
         entity.lastModifiedBy = getAuthorizedName();
     }
     public String getAuthorizedName() {
-        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            return "not authenticated";
+        }
+        Object principal = auth.getPrincipal();
         if (principal instanceof UserDetails) {
             return ((UserDetails) principal).getUsername();
         } else {

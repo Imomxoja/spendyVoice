@@ -22,6 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.http.HttpClient;
 import java.util.Properties;
 
 @Configuration
@@ -57,6 +58,11 @@ public class BeanConfig {
     public UserDetailsService userDetailsService() {
         return email -> userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+    }
+
+    @Bean
+    public HttpClient httpClient() {
+        return HttpClient.newHttpClient();
     }
 
     @Bean

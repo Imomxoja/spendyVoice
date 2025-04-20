@@ -1,13 +1,16 @@
 package org.example.service;
 
 import lombok.RequiredArgsConstructor;
+import org.example.domain.entity.Dataset;
 import org.example.domain.entity.user.UserEntity;
 import org.example.domain.entity.expense.Currency;
 import org.example.domain.entity.expense.ExpenseEntity;
 import org.example.domain.request.ExpenseRequest;
 import org.example.domain.response.BaseResponse;
 import org.example.domain.response.ExpenseResponse;
+import org.example.repository.DatasetRepository;
 import org.example.repository.ExpenseRepository;
+import org.glassfish.jaxb.core.v2.TODO;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -26,6 +29,7 @@ import java.util.*;
 @RequiredArgsConstructor
 public class ExpenseService {
     private final ExpenseRepository expenseRepository;
+    private final DatasetRepository datasetRepository;
     private static final String BASE_URL = "https://v6.exchangerate-api.com/v6/";
     @Value("${exchange.api}")
     private String API;
@@ -33,13 +37,25 @@ public class ExpenseService {
 
     public BaseResponse<List<ExpenseResponse>> save(List<ExpenseRequest> expenses, UserEntity user) {
         List<ExpenseResponse> responses = new ArrayList<>();
+        // TODO: need to be retested
 
         for (ExpenseRequest exp : expenses) {
+            StringBuilder category = new StringBuilder("unknown");
+            if (exp.getProduct() != null) {
+                Optional<Dataset> dataset = datasetRepository.searchForCategoryByProductName(exp.getProduct());
+                if (dataset.isPresent()) {
+                    Dataset data = dataset.get();
+                    category.setLength(0);
+                    if (data.getMainCategory().equalsIgnoreCase(data.getSubCategory())) category.append(data.getMainCategory());
+                    else category.append(data.getMainCategory()).append("/").append(data.getSubCategory());
+                }
+            }
             ExpenseEntity expense = ExpenseEntity.builder()
                     .product(exp.getProduct() == null ? "not provided" : exp.getProduct())
                     .currency(extractCurrency(exp.getPrice()) == null ? "not provided" : extractCurrency(exp.getPrice()))
                     .price(extractPrice(exp.getPrice()) == null ? "not provided" : extractPrice(exp.getPrice()))
                     .quantity(exp.getQuantity().isEmpty() ? "not provided" : exp.getQuantity())
+                    .category(category.toString())
                     .user(user).build();
             expenseRepository.save(expense);
 
@@ -51,6 +67,7 @@ public class ExpenseService {
                             .price(entity.getPrice())
                             .product(entity.getProduct())
                             .quantity(entity.getQuantity())
+                            .category(entity.getCategory())
                             .user(entity.getUser())
                             .build()
             ));
