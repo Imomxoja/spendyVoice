@@ -25,7 +25,7 @@ public class SecurityConfig {
                 .disable()
                 .authorizeRequests()
                 .requestMatchers("/api/v1/auth/register", "/api/v1/auth/authenticate", "/command/input"
-                , "/expense/exchange").permitAll()
+                , "/expense/exchange", "/dataset/**").permitAll()
                 .anyRequest().authenticated()
 //                .and().formLogin().loginPage("").defaultSuccessUrl("")
 //                .permitAll()

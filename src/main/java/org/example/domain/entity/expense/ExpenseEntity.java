@@ -21,6 +21,7 @@ public class ExpenseEntity extends BaseEntity {
     private String quantity;
     private String price;
     private String currency;
+    private String category;
     @ManyToOne
     @JoinColumn(name = "user_id")
     private UserEntity user;
