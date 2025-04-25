@@ -1,16 +1,13 @@
 package org.example.service;
 
 import lombok.RequiredArgsConstructor;
-import org.example.domain.entity.Dataset;
 import org.example.domain.entity.user.UserEntity;
 import org.example.domain.entity.expense.Currency;
 import org.example.domain.entity.expense.ExpenseEntity;
 import org.example.domain.request.ExpenseRequest;
 import org.example.domain.response.BaseResponse;
 import org.example.domain.response.ExpenseResponse;
-import org.example.repository.DatasetRepository;
 import org.example.repository.ExpenseRepository;
-import org.glassfish.jaxb.core.v2.TODO;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -19,6 +16,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -29,10 +27,11 @@ import java.util.*;
 @RequiredArgsConstructor
 public class ExpenseService {
     private final ExpenseRepository expenseRepository;
-    private final DatasetRepository datasetRepository;
     private static final String BASE_URL = "https://v6.exchangerate-api.com/v6/";
     @Value("${exchange.api}")
     private String API;
+    @Value("${together.api}")
+    private String TOGETHER_API;
     private final HttpClient httpClient;
 
     public BaseResponse<List<ExpenseResponse>> save(List<ExpenseRequest> expenses, UserEntity user) {
@@ -40,22 +39,17 @@ public class ExpenseService {
         // TODO: need to be retested
 
         for (ExpenseRequest exp : expenses) {
-            StringBuilder category = new StringBuilder("unknown");
+            String category = "unknown";
             if (exp.getProduct() != null) {
-                Optional<Dataset> dataset = datasetRepository.searchForCategoryByProductName(exp.getProduct());
-                if (dataset.isPresent()) {
-                    Dataset data = dataset.get();
-                    category.setLength(0);
-                    if (data.getMainCategory().equalsIgnoreCase(data.getSubCategory())) category.append(data.getMainCategory());
-                    else category.append(data.getMainCategory()).append("/").append(data.getSubCategory());
-                }
+                String res = findCategory(exp.getProduct());
+                category = res == null ? category : res;
             }
             ExpenseEntity expense = ExpenseEntity.builder()
                     .product(exp.getProduct() == null ? "not provided" : exp.getProduct())
                     .currency(extractCurrency(exp.getPrice()) == null ? "not provided" : extractCurrency(exp.getPrice()))
                     .price(extractPrice(exp.getPrice()) == null ? "not provided" : extractPrice(exp.getPrice()))
                     .quantity(exp.getQuantity().isEmpty() ? "not provided" : exp.getQuantity())
-                    .category(category.toString())
+                    .category(category)
                     .user(user).build();
             expenseRepository.save(expense);
 
@@ -78,6 +72,42 @@ public class ExpenseService {
                 .data(responses)
                 .status(200)
                 .build();
+    }
+
+    private String findCategory(String product) {
+        String model = "mistralai/Mistral-7B-Instruct-v0.3";
+        String prompt = "categorize this product \"" + product + "\" with this format (main category->sub category->product)without any additional comments";
+
+        JSONObject payload = new JSONObject();
+        JSONObject message = new JSONObject();
+        payload.put("model", model);
+        message.put("role", "user");
+        message.put("content", prompt);
+        payload.put("messages", new JSONObject[]{message});
+        payload.put("max_tokens", 256);
+        payload.put("temperature", 0.7);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.together.xyz/v1/chat/completions"))
+                .header("Authorization", "Bearer " + TOGETHER_API)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload.toString()))
+                .build();
+
+        try {
+            HttpResponse<String> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (resp.statusCode() == 200) {
+                JSONObject jsonResponse = new JSONObject(resp.body());
+                return jsonResponse.getJSONArray("choices")
+                        .getJSONObject(0)
+                        .getJSONObject("message")
+                        .getString("content");
+            }
+        } catch (IOException | InterruptedException e) {
+            System.out.println(e.getMessage());
+        }
+        return null;
     }
 
     private String extractPrice(String s) {
