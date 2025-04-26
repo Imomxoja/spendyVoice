@@ -14,10 +14,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -33,7 +36,7 @@ import static org.mockito.Mockito.*;
 public class ExpenseServiceTest {
     @Mock
     private ExpenseRepository expenseRepository;
-    @Spy
+    @Mock
     private HttpClient httpClient;
     @Mock
     private HttpResponse<String> httpResponse;
@@ -41,8 +44,10 @@ public class ExpenseServiceTest {
     @InjectMocks
     private ExpenseService expenseService;
     private ExpenseEntity expense;
-    private static final String BASE_URL = "https://api.example.com/";
-    private static final String API = "exchange";
+    @Value("${exchange.api}")
+    private String apiKey;
+    @Value("${together.api}")
+    private String TOGETHER_API;
 
     @BeforeEach
     public void setUp() {
@@ -122,7 +127,7 @@ public class ExpenseServiceTest {
         Double price = 100.0;
         String from = "USD";
         String to = "EUR";
-        String expectedUrl = BASE_URL + API + "/latest/" + from;
+        String expectedUrl = "https://v6.exchangerate-api.com/v6/" + apiKey + "/latest/" + from;
 
         String mockJson = new JSONObject()
                 .put("conversion_rates", new JSONObject().put("EUR", 0.9))
@@ -227,6 +232,55 @@ public class ExpenseServiceTest {
         assertEquals("failed to convert", res.getMessage());
         verify(expenseRepository).findById(id);
         verify(expenseRepository, never()).save(any());
+    }
+
+    @Test
+    public void findCategory_SuccessWithSuitableProduct () throws IOException, InterruptedException {
+        String product = "marshall headphone";
+        String respCategory = "Electronics->Headphones->Marshall headphone";
+        String resp = "{\"choices\":[{\"message\":{\"content\":\"" + respCategory + "\"}}]}";
+
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(httpResponse.body()).thenReturn(resp);
+        doReturn(httpResponse)
+                .when(httpClient)
+                .send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString()));
+
+        String res = expenseService.findCategory(product);
+        assertEquals(respCategory, res);
+        verify(httpClient).send(argThat(request ->
+                request.uri().equals(URI.create("https://api.together.xyz/v1/chat/completions")) &&
+                        request.headers().firstValue("Authorization").orElse("").equals("Bearer " + TOGETHER_API) &&
+                        request.method().equals("POST")
+        ), eq(HttpResponse.BodyHandlers.ofString()));
+    }
+
+    @Test
+    public void findCategory_ReturnsNull() throws IOException, InterruptedException {
+        String product = ".";
+        String resp = "{\"choices\":[{\"message\":{\"content\":\"unknown\"}}]}";
+
+        when(httpResponse.statusCode()).thenReturn(200);
+        when(httpResponse.body()).thenReturn(resp);
+        doReturn(httpResponse)
+                .when(httpClient)
+                .send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString()));
+        String res = expenseService.findCategory(product);
+        assertNull(res);
+    }
+
+    @Test
+    public void findCategory_ReturnsNullDueToHttpError() throws IOException, InterruptedException {
+        String product = "marshall headphone";
+
+        when(httpResponse.statusCode()).thenReturn(500);
+        doReturn(httpResponse)
+                .when(httpClient)
+                .send(any(HttpRequest.class), eq(HttpResponse.BodyHandlers.ofString()));
+
+        String res = expenseService.findCategory(product);
+
+        assertNull(res);
     }
 
 }

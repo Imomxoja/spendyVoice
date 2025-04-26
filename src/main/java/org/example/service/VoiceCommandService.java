@@ -58,13 +58,13 @@ public class VoiceCommandService {
     );
 
     public BaseResponse<VoiceCommandResponse> comprehend(UUID userId, MultipartFile file) {
-//        Optional<UserEntity> user = userRepository.findById(userId);
-//        if (user.isEmpty()) {
-//            return BaseResponse.<VoiceCommandResponse>builder()
-//                    .status(400)
-//                    .message("User not found")
-//                    .build();
-//        }
+        Optional<UserEntity> user = userRepository.findById(userId);
+        if (user.isEmpty()) {
+            return BaseResponse.<VoiceCommandResponse>builder()
+                    .status(400)
+                    .message("User not found")
+                    .build();
+        }
 
         String url;
         try {
@@ -92,8 +92,7 @@ public class VoiceCommandService {
 
         List<ExpenseRequest> extracted = extractProductInfo(rawText);
 
-        save(extracted, new UserEntity(), rawText);
-        return new BaseResponse<>();
+        return save(extracted, user.get(), rawText);
     }
 
     public String uploadAudioIntoCloud(MultipartFile file) throws IOException {
