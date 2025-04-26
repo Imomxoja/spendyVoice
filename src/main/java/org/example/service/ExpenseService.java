@@ -74,9 +74,10 @@ public class ExpenseService {
                 .build();
     }
 
-    private String findCategory(String product) {
+    public String findCategory(String product) {
         String model = "mistralai/Mistral-7B-Instruct-v0.3";
-        String prompt = "categorize this product \"" + product + "\" with this format (main category->sub category->product)without any additional comments";
+        String prompt = "categorize this product \"" + product + "\" with this format (main category->sub category->product)without any additional comments" +
+                ", if it's not the exact name of a product just return unknown";
 
         JSONObject payload = new JSONObject();
         JSONObject message = new JSONObject();
@@ -99,10 +100,11 @@ public class ExpenseService {
 
             if (resp.statusCode() == 200) {
                 JSONObject jsonResponse = new JSONObject(resp.body());
-                return jsonResponse.getJSONArray("choices")
+                String res = jsonResponse.getJSONArray("choices")
                         .getJSONObject(0)
                         .getJSONObject("message")
                         .getString("content");
+                return res.equals("unknown") ? null : res;
             }
         } catch (IOException | InterruptedException e) {
             System.out.println(e.getMessage());
