@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import lombok.*;
 import org.example.domain.entity.BaseEntity;
+import org.example.domain.entity.ReminderExpenseEntity;
 import org.example.domain.entity.VoiceCommandEntity;
 import org.example.domain.entity.expense.ExpenseEntity;
 import org.springframework.security.core.GrantedAuthority;
@@ -26,6 +27,8 @@ public class UserEntity extends BaseEntity implements UserDetails {
     private List<ExpenseEntity> expenses;
     @OneToMany(mappedBy = "user")
     private List<VoiceCommandEntity> commands;
+    @OneToMany(mappedBy = "user")
+    private List<ReminderExpenseEntity> reminders;
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
