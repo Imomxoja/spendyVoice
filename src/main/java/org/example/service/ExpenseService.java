@@ -33,10 +33,9 @@ public class ExpenseService {
     @Value("${together.api}")
     private String TOGETHER_API;
     private final HttpClient httpClient;
-
+ 
     public BaseResponse<List<ExpenseResponse>> save(List<ExpenseRequest> expenses, UserEntity user) {
         List<ExpenseResponse> responses = new ArrayList<>();
-        // TODO: need to be retested
 
         for (ExpenseRequest exp : expenses) {
             String category = "unknown";
