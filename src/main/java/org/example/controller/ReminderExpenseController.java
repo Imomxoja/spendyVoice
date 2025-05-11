@@ -5,10 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.example.domain.response.BaseResponse;
 import org.example.domain.response.ReminderExpenseResponse;
 import org.example.service.ReminderExpenseService;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -23,5 +21,12 @@ public class ReminderExpenseController {
     public BaseResponse<List<ReminderExpenseResponse>> loadReminders(HttpSession session) {
         UUID userId = (UUID) session.getAttribute("userId");
         return service.getUserReminders(userId);
+    }
+
+    @PostMapping("/create-reminder")
+    public BaseResponse<ReminderExpenseResponse> createReminder(HttpSession session,
+                                                                @RequestParam("audio") MultipartFile file) {
+        UUID userId = (UUID) session.getAttribute("userId");
+        return service.createReminder(userId, file);
     }
 }
