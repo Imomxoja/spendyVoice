@@ -1,8 +1,5 @@
 package org.example.service;
 
-import com.assemblyai.api.AssemblyAI;
-import com.assemblyai.api.resources.transcripts.types.Transcript;
-import com.google.cloud.storage.*;
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.ling.IndexedWord;
@@ -12,6 +9,7 @@ import edu.stanford.nlp.pipeline.StanfordCoreNLP;
 import edu.stanford.nlp.semgraph.SemanticGraph;
 import edu.stanford.nlp.semgraph.SemanticGraphEdge;
 import lombok.RequiredArgsConstructor;
+import org.example.domain.entity.ReminderExpenseEntity;
 import org.example.domain.entity.user.UserEntity;
 import org.example.domain.entity.VoiceCommandEntity;
 import org.example.domain.request.ExpenseRequest;
@@ -20,7 +18,6 @@ import org.example.domain.response.ExpenseResponse;
 import org.example.domain.response.VoiceCommandResponse;
 import org.example.repository.UserRepository;
 import org.example.repository.VoiceCommandRepository;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,7 +25,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -41,8 +37,7 @@ public class VoiceCommandService {
     private final VoiceCommandRepository voiceCommandRepository;
     private final ExpenseService expenseService;
     private final StanfordCoreNLP pipeline;
-    private final AssemblyAI assembly;
-    private final Storage storage;
+    private final TranscriptAudioService transcriptService;
 
     @Value("${google.cloud.bucket.name}")
     private String BUCKET_NAME;
@@ -66,43 +61,27 @@ public class VoiceCommandService {
                     .build();
         }
 
-        String url;
-        try {
-            // temporary saving the audio in order to have url for AAI to access the audio
-            url = uploadAudioIntoCloud(file);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        String rawText = transcriptService.getTheText(file);
 
-        if (url.isEmpty()) return BaseResponse.<VoiceCommandResponse>builder()
-                .message("Voice couldn't be recognized")
+        if (rawText == null) return BaseResponse.<VoiceCommandResponse>builder()
+                .message("The audio couldn't be recognized")
                 .status(400)
                 .build();
-
-        Transcript transcript = assembly.transcripts().transcribe(url);
-
-        if (transcript.getText().isEmpty()) {
-            return BaseResponse.<VoiceCommandResponse>builder()
-                    .message("Voice couldn't be recognized")
-                    .status(400)
-                    .build();
-        }
-
-        String rawText = transcript.getText().get();
 
         List<ExpenseRequest> extracted = extractProductInfo(rawText);
 
         return save(extracted, user.get(), rawText);
     }
 
-    public String uploadAudioIntoCloud(MultipartFile file) throws IOException {
-        if (file == null || file.getOriginalFilename() == null) return "";
-        String fileName = "audio/" + file.getOriginalFilename();
-        BlobId blobId = BlobId.of(BUCKET_NAME, fileName);
-        BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
-        storage.create(blobInfo, file.getBytes());
-
-        return String.format("https://storage.googleapis.com/%s/%s", BUCKET_NAME, fileName);
+    public BaseResponse<VoiceCommandResponse> saveForReminder(UserEntity user, ReminderExpenseEntity reminder, String rawText) {
+         VoiceCommandEntity command = VoiceCommandEntity.builder()
+                 .reminder(reminder)
+                 .rawText(rawText)
+                 .user(user)
+                 .build();
+         voiceCommandRepository.save(command);
+         return BaseResponse.<VoiceCommandResponse>builder()
+                 .message("").status(200).build();
     }
 
     public BaseResponse<VoiceCommandResponse> save(List<ExpenseRequest> extracted, UserEntity user, String rawText) {

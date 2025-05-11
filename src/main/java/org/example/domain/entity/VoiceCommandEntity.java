@@ -19,4 +19,8 @@ public class VoiceCommandEntity extends BaseEntity {
     @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "expense_id", unique = true)
     private ExpenseEntity expense;
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "reminder_expense_id", unique = true)
+    private ReminderExpenseEntity reminder;
+
 }

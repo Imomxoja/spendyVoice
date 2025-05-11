@@ -27,20 +27,19 @@ import java.util.*;
 @RequiredArgsConstructor
 public class ExpenseService {
     private final ExpenseRepository expenseRepository;
+    private final MistralAIService mistralAIService;
+    private final HttpClient httpClient;
     private static final String BASE_URL = "https://v6.exchangerate-api.com/v6/";
     @Value("${exchange.api}")
     private String API;
-    @Value("${together.api}")
-    private String TOGETHER_API;
-    private final HttpClient httpClient;
- 
+
     public BaseResponse<List<ExpenseResponse>> save(List<ExpenseRequest> expenses, UserEntity user) {
         List<ExpenseResponse> responses = new ArrayList<>();
 
         for (ExpenseRequest exp : expenses) {
             String category = "unknown";
             if (exp.getProduct() != null) {
-                String res = findCategory(exp.getProduct());
+                String res = mistralAIService.findCategory(exp.getProduct());
                 category = res == null ? category : res;
             }
             ExpenseEntity expense = ExpenseEntity.builder()
@@ -71,44 +70,6 @@ public class ExpenseService {
                 .data(responses)
                 .status(200)
                 .build();
-    }
-
-    public String findCategory(String product) {
-        String model = "mistralai/Mistral-7B-Instruct-v0.3";
-        String prompt = "categorize this product \"" + product + "\" with this format (main category->sub category->product)without any additional comments" +
-                ", if it's not the exact name of a product just return unknown";
-
-        JSONObject payload = new JSONObject();
-        JSONObject message = new JSONObject();
-        payload.put("model", model);
-        message.put("role", "user");
-        message.put("content", prompt);
-        payload.put("messages", new JSONObject[]{message});
-        payload.put("max_tokens", 256);
-        payload.put("temperature", 0.7);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.together.xyz/v1/chat/completions"))
-                .header("Authorization", "Bearer " + TOGETHER_API)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(payload.toString()))
-                .build();
-
-        try {
-            HttpResponse<String> resp = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (resp.statusCode() == 200) {
-                JSONObject jsonResponse = new JSONObject(resp.body());
-                String res = jsonResponse.getJSONArray("choices")
-                        .getJSONObject(0)
-                        .getJSONObject("message")
-                        .getString("content");
-                return res.equals("unknown") ? null : res;
-            }
-        } catch (IOException | InterruptedException e) {
-            System.out.println(e.getMessage());
-        }
-        return null;
     }
 
     private String extractPrice(String s) {
