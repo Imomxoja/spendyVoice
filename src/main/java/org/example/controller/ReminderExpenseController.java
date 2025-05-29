@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.domain.response.BaseResponse;
 import org.example.domain.response.ReminderExpenseResponse;
 import org.example.service.ReminderExpenseService;
+import org.springframework.data.repository.query.Param;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -29,4 +30,10 @@ public class ReminderExpenseController {
         UUID userId = (UUID) session.getAttribute("userId");
         return service.createReminder(userId, file);
     }
+
+    @PostMapping("/mark-as-done")
+    public BaseResponse<ReminderExpenseResponse> markAsDone(@Param("reminderId") UUID reminderId) {
+        return service.markAsDone(reminderId);
+    }
+
 }

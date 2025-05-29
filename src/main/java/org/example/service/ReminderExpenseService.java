@@ -134,4 +134,21 @@ public class ReminderExpenseService {
         }
         return res;
     }
+
+    public BaseResponse<ReminderExpenseResponse> markAsDone(UUID reminderId) {
+        Optional<ReminderExpenseEntity> reminderEntity = repository.findById(reminderId);
+
+        if (reminderEntity.isEmpty()) return BaseResponse.<ReminderExpenseResponse>builder()
+                .message("Reminder not found").status(400).build();
+
+        ReminderExpenseEntity reminder = reminderEntity.get();
+        reminder.setMarkedAsDone(true);
+
+        repository.save(reminder);
+
+        return BaseResponse.<ReminderExpenseResponse>builder()
+                .status(200).build();
+    }
+
+
 }
