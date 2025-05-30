@@ -61,7 +61,13 @@ public class VoiceCommandService {
                     .build();
         }
 
-        String rawText = transcriptService.getTheText(file);
+        String rawText;
+        try {
+            rawText = transcriptService.getTheText(file);
+        } catch (RuntimeException e) {
+            return BaseResponse.<VoiceCommandResponse>builder()
+                    .message(e.getMessage()).status(400).build();
+        }
 
         if (rawText == null) return BaseResponse.<VoiceCommandResponse>builder()
                 .message("The audio couldn't be recognized")
