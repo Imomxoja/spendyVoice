@@ -37,7 +37,7 @@ public class TranscriptAudioService {
             // temporary saving the audio in order to have url for AAI to access the audio
             url = uploadAudioIntoCloud(file);
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Failed to upload audio");
         }
 
         if (url.isEmpty()) return null;
@@ -47,5 +47,9 @@ public class TranscriptAudioService {
         if (transcript.getText().isEmpty()) return null;
 
         return transcript.getText().get();
+    }
+
+    public void setBUCKET_NAME_OnlyForTesting(String BUCKET_NAME) {
+        this.BUCKET_NAME = BUCKET_NAME;
     }
 }
