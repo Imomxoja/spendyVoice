@@ -40,7 +40,9 @@ public class VoiceCommandController {
     @GetMapping("/delete-command")
     @PreAuthorize("hasAnyAuthority('user:delete', 'admin:delete')")
     public BaseResponse<VoiceCommandResponse> deleteCommand(@Param("id") UUID voiceCommandID) {
+        // quick view of reminders of users when they logged in.
         return service.delete(voiceCommandID);
     }
 
+    
 }

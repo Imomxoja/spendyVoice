@@ -151,4 +151,20 @@ public class ReminderExpenseService {
     }
 
 
+    public BaseResponse<List<ReminderExpenseResponse>> getScheduledReminders(UUID userId) {
+        List<ReminderExpenseEntity> reminders = repository.getScheduledReminders(userId);
+
+        List<ReminderExpenseResponse> result = reminders.stream().map(reminder ->
+            ReminderExpenseResponse.builder()
+                    .dueDate(reminder.getDueDate())
+                    .item(reminder.getItem())
+                    .user(reminder.getUser())
+                    .price(reminder.getPrice())
+                    .quantity(reminder.getQuantity())
+                    .build()
+        ).collect(Collectors.toList());
+
+        return BaseResponse.<List<ReminderExpenseResponse>>builder()
+                .data(result).status(200).message("Scheduled user reminders").build();
+    }
 }

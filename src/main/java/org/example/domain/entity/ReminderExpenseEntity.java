@@ -9,7 +9,7 @@ import org.example.domain.entity.user.UserEntity;
 
 import java.time.LocalDateTime;
 
-@Entity(name = "reminder")
+@Entity(name = "reminders")
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor

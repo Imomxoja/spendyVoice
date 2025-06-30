@@ -11,6 +11,12 @@ import java.util.UUID;
 
 @Repository
 public interface ReminderExpenseRepository extends JpaRepository<ReminderExpenseEntity, UUID> {
-    @Query("select r from reminders r where r.user.id = :id and r.markedAsDone = false")
+    @Query("select r from reminders r " +
+            "where r.user.id = :id and r.markedAsDone = false")
     List<ReminderExpenseEntity> getUserReminders(@Param("id") UUID id);
+
+    @Query("select r from reminders r " +
+            "where r.user.id = :id and r.due_date > now()" +
+            "order by r.due_date asc")
+    List<ReminderExpenseEntity> getScheduledReminders(@Param("id") UUID userId);
 }
